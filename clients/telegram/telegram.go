@@ -1,100 +1,54 @@
 package telegram
 
 import (
-	"encoding/json"
-	"io"
-	"net/http"
-	"net/url"
-	"path"
-	"sc-music-snippeter/lib/errutil"
-	"strconv"
-)
+	"log"
+	"sc-music-snippeter/lib/logger"
+	"sc-music-snippeter/processor"
 
-const (
-	getUpdatesMethod = "getUpdates"
-	sendMessageMethod = "sendMessage"
+	tg "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
 type Client struct {
-	host     string
-	basePath string
-	client   http.Client
+	bot *tg.BotAPI
 }
 
-func New(host string, token string) Client {
+func New(token string) Client {
+	bot, err := tg.NewBotAPI(token)
+	if err != nil {
+		logger.LogError("Telegram: Failed to create client", err)
+	}
+
+	bot.Debug = true
+	log.Printf("Telegram: Authorized on account %s", bot.Self.UserName)
+
 	return Client{
-		host: host,
-		basePath: basePath(token),
-		client: http.Client{},
+		bot: bot,
 	}
 }
 
+func (c *Client) Updates() {
+	update := tg.NewUpdate(0)
+	update.Timeout = 60
 
-func (c *Client) SendMessage(chatID int, text string) error {
-	query := url.Values{}
-	query.Add("chat_id", strconv.Itoa(chatID))
-	query.Add("text", text)
-
-	_,err := c.doRequest(sendMessageMethod, query)
+	updates, err := c.bot.GetUpdatesChan(update)
 	if err != nil {
-		return errutil.Wrap("can't send message", err)
+		logger.LogError("Telegram: Failed to read updates", err)
 	}
 
-	return nil
+	for upd := range updates {
+		if upd.Message != nil && upd.Message.Text != "" {
+			audioCutName :=  processor.UrlProcessor(upd.Message.Text)
+			// Send the audio back to Telegram channel
+			audioMsg := tg.NewAudioUpload(upd.Message.Chat.ID, audioCutName)
+			c.bot.Send(audioMsg)
+			logger.Log("Telegram: message sent")
+		}
+	}
 }
 
-func (c *Client) Updates(offset int, limit int)([]Update, error) {
-	query := url.Values{}
-	query.Add("offset", strconv.Itoa(offset))
-	query.Add("limit", strconv.Itoa(limit))
-
-	// do request
-	data, err := c.doRequest(getUpdatesMethod, query)
+func (c *Client) SendMessage(message tg.Chattable) {
+	_, err := c.bot.Send(message)
 	if err != nil {
-		return nil, err
+		logger.LogError("Telegram: Unable to send message", err)
 	}
-
-	var res UpdatesResponse
-
-	if err := json.Unmarshal(data, &res); 
-	err != nil {
-		return nil, err
-	}
-
-	return res.Result, nil
-}
-
-func (c *Client) doRequest(method string, query url.Values) (data[]byte, err error) {
-	defer func() { err = errutil.Wrap("can't do request", err) }()
-
-	url := url.URL{
-		Scheme: "https",
-		Host: c.host,
-		Path: path.Join(c.basePath, method),
-	}
-
-	req,err := http.NewRequest(http.MethodGet, url.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.URL.RawQuery = query.Encode()
-
-	resp,err:= c.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {_=resp.Body.Close()}()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	
-	return body, nil
-}
-
-func basePath(token string) string {
-	return "bot" + token
 }

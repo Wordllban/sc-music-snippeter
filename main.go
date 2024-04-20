@@ -3,25 +3,46 @@ package main
 import (
 	"flag"
 	"log"
-	"sc-music-snippeter/clients/telegram"
-)
 
-const (
-	tgBotHost = "api.telegram.org"
+	tg "sc-music-snippeter/clients/telegram"
+	logger "sc-music-snippeter/lib/logger"
 )
 
 func main() {
-	tgClient = telegram.New(tgBotHost, mustToken())
+	
+	platform, token := mustArgs()
 
-	//fetcher = fetcher.New()
+	switch platform {
+		case "tg":
+			tgClient := tg.New(token)
+			tgClient.Updates()
+		default:
+			logger.Log("Platform does not supported")
+			return
+	}
 
-	//processor = processor.New()
-
-	// consumer.Start(fetcher, processor)
 }
 
+func mustArgs() (string, string) {
+	log.Println("Available platforms: tg")
+	platform := flag.String("platform", "", "platform name: ")
+	token := flag.String("token", "", "platform name: ")
+	
+	flag.Parse()
+
+	if *platform == "" {
+		log.Fatal("platform is not specified")
+	}
+
+	if *token == "" {
+		log.Fatal("token is not specified")
+	}
+
+	return *platform, *token
+}
+/* 
 func mustToken() string {
-	token := flag.String("tg-token", "", "access token for telegram bot")
+	token := flag.String("client-token", "", "access token for messanger client")
 	
 	flag.Parse()
 
@@ -31,3 +52,4 @@ func mustToken() string {
 
 	return *token
 }
+ */
