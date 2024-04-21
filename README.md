@@ -13,4 +13,6 @@ Primarily created for Telegram and SoundCloud, but the architecture is able to e
 
 - SoundCloud
 
-![TrackSnippeter](https://github.com/Wordllban/sc-music-snippeter/blob/main/README/README.md)
+#### Architecture Description
+
+![TrackSnippeter](https://github.com/Wordllban/sc-music-snippeter/blob/main/README/diagram.png)
